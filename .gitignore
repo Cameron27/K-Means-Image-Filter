@@ -1,0 +1,8 @@
+/datasets
+/.idea
+/out
+MLAssignment1.iml
+/report/*
+!/report/report.tex
+!/report/report.bib
+!/report/centroids.png
