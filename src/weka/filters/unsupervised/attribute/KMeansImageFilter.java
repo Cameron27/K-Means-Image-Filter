@@ -283,7 +283,7 @@ public class KMeansImageFilter extends SimpleBatchFilter {
             // Extract patches
             Matrix P = null;
             try {
-                P = extractPatches(fileName, numPatchValues, numPatchesPerImg, allOnesNumPatchValues, numPoolsPerDimension, oneOverNumPatchValues, numPatchPixels);
+                P = extractPatches(fileName, numPatchValues, numPatchesPerImg, numPoolsPerDimension, numPatchPixels, allOnesNumPatchValues, oneOverNumPatchValues);
             } catch (IOException e) {
                 System.err.println("File " + fileName + " could not be read");
                 System.exit(0);
@@ -296,7 +296,7 @@ public class KMeansImageFilter extends SimpleBatchFilter {
 
             debugPrint("Pooling features");
             // Pool features
-            double[] featureVector = poolFeatures(output.numAttributes(), numPoolsPerImg, featureMatrix);
+            double[] featureVector = poolFeatures(featureMatrix, output.numAttributes(), numPoolsPerImg);
 
             // Set class
             featureVector[output.classIndex()] = inst.classValue();
@@ -308,6 +308,12 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         return output;
     }
 
+    /**
+     * Initialises centroids in m_D by sampling a normal distribution and normalising the vectors.
+     *
+     * @param numPatchValues number of values in a patch
+     * @param rand           random object to use
+     */
     private void initialiseCentroids(int numPatchValues, Random rand) {
         // Create random centroids
         m_D = new DenseMatrix(numPatchValues, m_K);
@@ -330,6 +336,13 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         }
     }
 
+    /**
+     * Assigns each data point to the closest centroid in m_D.
+     *
+     * @param X          matrix of data points
+     * @param S          matrix to store results in
+     * @param numPatches number of values in a patch
+     */
     private void calculateSMatrix(Matrix X, Matrix S, int numPatches) {
         debugPrint("Calculating initial S matrix.");
         // Calculate S
@@ -360,6 +373,16 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         }
     }
 
+    /**
+     * Replaces all the empty patches in m_D.
+     *
+     * @param X              matrix of data points
+     * @param S              matrix assigning data points to closest centroids
+     * @param numPatches     number of patches
+     * @param numPatchValues number of values in a patch
+     * @param rand           random object to use
+     * @return the number of patches that were empty
+     */
     private int replaceEmptyPatches(Matrix X, Matrix S, int numPatches, int numPatchValues, Random rand) {
         int numEmpty = 0;
         // For each row in S (i.e. centroid)
@@ -404,6 +427,13 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         return numEmpty;
     }
 
+    /**
+     * Optimise the dictionary m_D.
+     *
+     * @param X              matrix of data points
+     * @param S              matrix assigning data points to closest centroids
+     * @param numPatchValues number of values in a patch
+     */
     private void optimiseDictionary(Matrix X, Matrix S, int numPatchValues) {
         debugPrint("Updating dictionary.");
         // Calculate new D
@@ -427,7 +457,20 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         }
     }
 
-    private Matrix extractPatches(String fileName, int numPatchValues, int numPatchesPerImg, Vector allOnesNumPatchValues, int numPoolsPerDimension, Vector oneOverNumPatchValues, int numPatchPixels) throws IOException {
+    /**
+     * Extracts patches from an image file.
+     *
+     * @param fileName              file name of image to extract patches from
+     * @param numPatchValues        number of values in a patch
+     * @param numPatchesPerImg      number of patches that will be extracted from each image
+     * @param numPoolsPerDimension  number of pools per dimension
+     * @param numPatchPixels        number of pixels in a patch
+     * @param allOnesNumPatchValues vector full of ones
+     * @param oneOverNumPatchValues vector full of one over the number of patch values
+     * @return matrix of extracted patches ordered by pools
+     * @throws IOException error reading from image file
+     */
+    private Matrix extractPatches(String fileName, int numPatchValues, int numPatchesPerImg, int numPoolsPerDimension, int numPatchPixels, Vector allOnesNumPatchValues, Vector oneOverNumPatchValues) throws IOException {
         BufferedImage img = ImageIO.read(new File(fileName));
 
         Matrix P = new DenseMatrix(numPatchValues, numPatchesPerImg);
@@ -481,9 +524,17 @@ public class KMeansImageFilter extends SimpleBatchFilter {
         return P;
     }
 
-    private double[] poolFeatures(int numAttributes, int numPoolsPerImg, Matrix featureMatrix) {
+    /**
+     * Pool features together.
+     *
+     * @param unpooledFeatureMatrix matrix of unpooled features
+     * @param numFeatures           number of features in result
+     * @param numPoolsPerImg        number of pools in image
+     * @return array of features
+     */
+    private double[] poolFeatures(Matrix unpooledFeatureMatrix, int numFeatures, int numPoolsPerImg) {
         // Setup feature vector
-        double[] featureVector = new double[numAttributes];
+        double[] featureVector = new double[numFeatures];
 
         // Pool vales together
         int colIndex = 0;
@@ -493,7 +544,7 @@ public class KMeansImageFilter extends SimpleBatchFilter {
             for (int j = 0; j < m_poolSize * m_poolSize; j++) {
                 // Add the value in each row to the final feature vector
                 for (int r = 0; r < m_K; r++) {
-                    featureVector[i * m_K + r] += Math.max(0, featureMatrix.get(r, colIndex));
+                    featureVector[i * m_K + r] += Math.max(0, unpooledFeatureMatrix.get(r, colIndex));
                 }
 
                 colIndex++;
